@@ -80,15 +80,40 @@ const Announcements: React.FC = () => {
     setCreating(true);
 
     try {
-      const { error } = await supabase.from('announcements').insert({
+      const { data: announcementData, error } = await supabase.from('announcements').insert({
         title: newAnnouncement.title,
         content: newAnnouncement.content,
         author_id: profile?.id,
         department_id: newAnnouncement.isGlobal ? null : profile?.department_id,
         is_global: newAnnouncement.isGlobal,
-      });
+      }).select().single();
 
       if (error) throw error;
+
+      // Create notifications for relevant users
+      const { data: usersToNotify } = await supabase
+        .from('profiles')
+        .select('id, department_id')
+        .neq('id', profile?.id);
+
+      if (usersToNotify) {
+        const notifications = usersToNotify
+          .filter(user => {
+            // Admin sees all, others see global or their department
+            if (newAnnouncement.isGlobal) return true;
+            return user.department_id === profile?.department_id;
+          })
+          .map(user => ({
+            user_id: user.id,
+            title: 'New Announcement',
+            message: `${newAnnouncement.title} - Posted by ${profile?.role === 'admin' ? 'Admin' : 'Faculty'}`,
+            link: '/announcements',
+          }));
+
+        if (notifications.length > 0) {
+          await supabase.from('notifications').insert(notifications);
+        }
+      }
 
       toast({
         title: 'Announcement Posted',
