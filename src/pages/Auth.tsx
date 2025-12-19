@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { GraduationCap, Loader2, Mail, Lock, User, Building, Hash, Users } from 'lucide-react';
+import { GraduationCap, Loader2, Mail, Lock, User, Building, Hash } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
@@ -49,11 +49,13 @@ const Auth: React.FC = () => {
     fullName: '',
     email: '',
     password: '',
-    role: 'student' as 'student' | 'faculty' | 'admin',
     departmentId: '',
     rollNumber: '',
     section: '',
   });
+
+  // Filter to show only departments with full names (format: "CODE – Full Name")
+  const filteredDepartments = departments.filter(dept => dept.name.includes(' – '));
 
   useEffect(() => {
     if (user) {
@@ -119,7 +121,7 @@ const Auth: React.FC = () => {
       email: signupForm.email,
       password: signupForm.password,
       fullName: signupForm.fullName,
-      role: signupForm.role,
+      role: 'student',
       departmentId: signupForm.departmentId,
       rollNumber: signupForm.rollNumber,
       section: signupForm.section,
@@ -250,76 +252,52 @@ const Auth: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Role</Label>
-                    <Select
-                      value={signupForm.role}
-                      onValueChange={(value: 'student' | 'faculty' | 'admin') =>
-                        setSignupForm({ ...signupForm, role: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <Users className="mr-2 h-4 w-4" />
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="student">Student</SelectItem>
-                        <SelectItem value="faculty">Faculty</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
                 <div className="space-y-2">
-                    <Label>Department <span className="text-destructive">*</span></Label>
-                    <Select
-                      value={signupForm.departmentId}
-                      onValueChange={(value) => setSignupForm({ ...signupForm, departmentId: value })}
-                    >
-                      <SelectTrigger>
-                        <Building className="mr-2 h-4 w-4" />
-                        <SelectValue placeholder="Select Department" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        {departments.map((dept) => (
-                          <SelectItem key={dept.id} value={dept.id}>
-                            {dept.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <Label>Department <span className="text-destructive">*</span></Label>
+                  <Select
+                    value={signupForm.departmentId}
+                    onValueChange={(value) => setSignupForm({ ...signupForm, departmentId: value })}
+                  >
+                    <SelectTrigger>
+                      <Building className="mr-2 h-4 w-4" />
+                      <SelectValue placeholder="Select Department" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {filteredDepartments.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                {signupForm.role === 'student' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="roll-number">Roll Number</Label>
-                      <div className="relative">
-                        <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="roll-number"
-                          placeholder="21CS101"
-                          value={signupForm.rollNumber}
-                          onChange={(e) =>
-                            setSignupForm({ ...signupForm, rollNumber: e.target.value })
-                          }
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="section">Section</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="roll-number">Roll Number</Label>
+                    <div className="relative">
+                      <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
-                        id="section"
-                        placeholder="A"
-                        value={signupForm.section}
-                        onChange={(e) => setSignupForm({ ...signupForm, section: e.target.value })}
+                        id="roll-number"
+                        placeholder="21CS101"
+                        value={signupForm.rollNumber}
+                        onChange={(e) =>
+                          setSignupForm({ ...signupForm, rollNumber: e.target.value })
+                        }
+                        className="pl-10"
                       />
                     </div>
                   </div>
-                )}
+                  <div className="space-y-2">
+                    <Label htmlFor="section">Section</Label>
+                    <Input
+                      id="section"
+                      placeholder="A"
+                      value={signupForm.section}
+                      onChange={(e) => setSignupForm({ ...signupForm, section: e.target.value })}
+                    />
+                  </div>
+                </div>
 
                 <Button type="submit" variant="hero" className="w-full" size="lg" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
