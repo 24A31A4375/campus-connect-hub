@@ -127,12 +127,13 @@ const NewRequest: React.FC = () => {
       const { data, error } = await supabase
         .from('requests')
         .insert({
-          student_id: profile?.id,
-          category: formData.category,
+          student_id: profile?.id as string,
+          category: formData.category as 'bonafide_certificate' | 'fee_issues' | 'exam_queries' | 'hostel_issues' | 'library_issues' | 'general_administration',
           description: formData.description,
           priority: formData.priority,
           department_id: profile?.department_id,
           document_url: documentUrl,
+          request_number: `REQ-${Date.now()}`,
         })
         .select()
         .single();

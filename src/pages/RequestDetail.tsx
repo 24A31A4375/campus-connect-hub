@@ -54,6 +54,7 @@ interface RequestDetail {
   verification_id: string | null;
   created_at: string;
   updated_at: string;
+  student_id: string;
   profiles: { full_name: string; email: string; roll_number: string | null } | null;
   departments: { name: string } | null;
   assigned: { full_name: string } | null;
@@ -135,12 +136,21 @@ const RequestDetail: React.FC = () => {
     setUpdating(true);
 
     try {
+      const validStatus = newStatus as 'submitted' | 'in_progress' | 'approved' | 'rejected';
       const { error } = await supabase
         .from('requests')
-        .update({ status: newStatus })
+        .update({ status: validStatus })
         .eq('id', request.id);
 
       if (error) throw error;
+
+      // Create notification for status change
+      await supabase.from('notifications').insert({
+        user_id: request.student_id,
+        title: 'Request Status Updated',
+        message: `Your request ${request.request_number} status changed to ${newStatus.replace('_', ' ')}`,
+        link: `/requests/${request.id}`,
+      });
 
       if (remarks.trim()) {
         await supabase.from('request_timeline').insert({
