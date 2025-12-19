@@ -28,7 +28,7 @@ const signupSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(['student', 'faculty', 'admin']),
-  departmentId: z.string().min(1, 'Please select a department'),
+  departmentId: z.string().min(1, 'Department is required'),
   rollNumber: z.string().optional(),
   section: z.string().optional(),
 });
@@ -272,17 +272,17 @@ const Auth: React.FC = () => {
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Department</Label>
+                <div className="space-y-2">
+                    <Label>Department <span className="text-destructive">*</span></Label>
                     <Select
                       value={signupForm.departmentId}
                       onValueChange={(value) => setSignupForm({ ...signupForm, departmentId: value })}
                     >
                       <SelectTrigger>
                         <Building className="mr-2 h-4 w-4" />
-                        <SelectValue placeholder="Select" />
+                        <SelectValue placeholder="Select Department" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60">
                         {departments.map((dept) => (
                           <SelectItem key={dept.id} value={dept.id}>
                             {dept.name}
