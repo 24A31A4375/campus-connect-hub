@@ -17,8 +17,11 @@ import {
   TrendingUp,
   Users,
   Megaphone,
+  Shield,
+  AlertTriangle,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface RequestStats {
   total: number;
@@ -26,6 +29,7 @@ interface RequestStats {
   inProgress: number;
   approved: number;
   rejected: number;
+  urgentBonafide: number;
 }
 
 interface RecentRequest {
@@ -54,6 +58,7 @@ const Dashboard: React.FC = () => {
     inProgress: 0,
     approved: 0,
     rejected: 0,
+    urgentBonafide: 0,
   });
   const [recentRequests, setRecentRequests] = useState<RecentRequest[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -64,7 +69,7 @@ const Dashboard: React.FC = () => {
       if (!profile) return;
 
       // Fetch request stats
-      let query = supabase.from('requests').select('status');
+      let query = supabase.from('requests').select('status, category, priority');
       
       if (profile.role === 'student') {
         query = query.eq('student_id', profile.id);
@@ -81,6 +86,12 @@ const Dashboard: React.FC = () => {
           inProgress: requestsData.filter((r) => r.status === 'in_progress').length,
           approved: requestsData.filter((r) => r.status === 'approved').length,
           rejected: requestsData.filter((r) => r.status === 'rejected').length,
+          urgentBonafide: requestsData.filter((r) => 
+            r.category === 'bonafide_certificate' && 
+            r.priority === 'urgent' && 
+            r.status !== 'approved' && 
+            r.status !== 'rejected'
+          ).length,
         });
       }
 
@@ -174,6 +185,15 @@ const Dashboard: React.FC = () => {
     },
   ];
 
+  // Admin-only urgent bonafide card
+  const urgentBonafideCard = profile?.role === 'admin' && stats.urgentBonafide > 0 ? {
+    title: 'Urgent Bonafide',
+    value: stats.urgentBonafide,
+    icon: AlertTriangle,
+    color: 'bg-destructive/10 text-destructive',
+    urgent: true,
+  } : null;
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -216,6 +236,31 @@ const Dashboard: React.FC = () => {
           ))}
         </div>
 
+        {/* Urgent Bonafide Alert for Admin */}
+        {urgentBonafideCard && (
+          <Card className="animate-fade-in-up border-destructive/50 bg-destructive/5">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/20">
+                    <AlertTriangle className="h-6 w-6 text-destructive animate-pulse" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-destructive">URGENT – ADMIN ACTION REQUIRED</p>
+                    <p className="text-2xl font-bold text-destructive">{stats.urgentBonafide} Urgent Bonafide Request{stats.urgentBonafide > 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <Link to="/requests?category=bonafide_certificate&priority=urgent">
+                  <Button variant="destructive">
+                    View Urgent Requests
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Main Content Grid */}
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Recent Requests */}
@@ -249,39 +294,61 @@ const Dashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {recentRequests.map((request) => (
-                    <Link
-                      key={request.id}
-                      to={`/requests/${request.id}`}
-                      className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50"
-                    >
-                      <div className="flex items-center gap-4">
-                        {getStatusIcon(request.status)}
-                        <div>
-                          <p className="font-medium">{request.request_number}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {formatCategory(request.category)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {request.priority === 'urgent' && (
-                          <Badge variant="destructive" className="text-xs">
-                            Urgent
-                          </Badge>
+                  {recentRequests.map((request) => {
+                    const isUrgentBonafide = request.category === 'bonafide_certificate' && request.priority === 'urgent';
+                    const isBonafide = request.category === 'bonafide_certificate';
+                    const isPending = request.status !== 'approved' && request.status !== 'rejected';
+                    
+                    return (
+                      <Link
+                        key={request.id}
+                        to={`/requests/${request.id}`}
+                        className={cn(
+                          "flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50",
+                          isUrgentBonafide && isPending && "border-destructive/50 bg-destructive/5"
                         )}
-                        <Badge
-                          variant="outline"
-                          className={`capitalize ${getStatusBadge(request.status)}`}
-                        >
-                          {request.status.replace('_', ' ')}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(request.created_at), { addSuffix: true })}
-                        </span>
-                      </div>
-                    </Link>
-                  ))}
+                      >
+                        <div className="flex items-center gap-4">
+                          {getStatusIcon(request.status)}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{request.request_number}</p>
+                              {isUrgentBonafide && isPending && (
+                                <AlertTriangle className="h-4 w-4 text-destructive" />
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm text-muted-foreground">
+                                {formatCategory(request.category)}
+                              </p>
+                              {isBonafide && (
+                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
+                                  <Shield className="mr-1 h-3 w-3" />
+                                  Admin
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {request.priority === 'urgent' && (
+                            <Badge variant="destructive" className="text-xs">
+                              Urgent
+                            </Badge>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className={`capitalize ${getStatusBadge(request.status)}`}
+                          >
+                            {request.status.replace('_', ' ')}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(request.created_at), { addSuffix: true })}
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

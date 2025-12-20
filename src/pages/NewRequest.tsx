@@ -144,9 +144,31 @@ const NewRequest: React.FC = () => {
       await supabase.from('request_timeline').insert({
         request_id: data.id,
         status: 'submitted',
-        remarks: 'Request submitted successfully',
+        remarks: formData.category === 'bonafide_certificate' && formData.priority === 'urgent'
+          ? 'Urgent Bonafide Certificate request submitted - Routed to Admin'
+          : 'Request submitted successfully',
         updated_by: profile?.id,
       });
+
+      // Notify admins for urgent bonafide requests
+      if (formData.category === 'bonafide_certificate' && formData.priority === 'urgent') {
+        // Fetch admin users
+        const { data: adminRoles } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'admin');
+
+        if (adminRoles && adminRoles.length > 0) {
+          const notifications = adminRoles.map(admin => ({
+            user_id: admin.user_id,
+            title: '🚨 URGENT: Bonafide Certificate Request',
+            message: `Urgent bonafide certificate request ${data.request_number} requires immediate admin action.`,
+            link: `/requests/${data.id}`,
+          }));
+
+          await supabase.from('notifications').insert(notifications);
+        }
+      }
 
       toast({
         title: 'Request Submitted!',
@@ -283,45 +305,56 @@ const NewRequest: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Priority */}
-                <div className="space-y-3">
-                  <Label>Priority Level</Label>
-                  <RadioGroup
-                    value={formData.priority}
-                    onValueChange={(value: 'normal' | 'urgent') =>
-                      setFormData({ ...formData, priority: value })
-                    }
-                    className="flex gap-4"
-                  >
-                    <label
-                      className={cn(
-                        'flex flex-1 cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all hover:bg-muted/50',
-                        formData.priority === 'normal' && 'border-primary bg-primary/5'
-                      )}
+                {/* Priority - Show for Bonafide Certificate */}
+                {formData.category === 'bonafide_certificate' && (
+                  <div className="space-y-3">
+                    <Label>Priority Level</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Select Urgent if you need the certificate within 24-48 hours
+                    </p>
+                    <RadioGroup
+                      value={formData.priority}
+                      onValueChange={(value: 'normal' | 'urgent') =>
+                        setFormData({ ...formData, priority: value })
+                      }
+                      className="flex gap-4"
                     >
-                      <RadioGroupItem value="normal" />
-                      <div>
-                        <p className="font-medium">Normal</p>
-                        <p className="text-xs text-muted-foreground">Standard processing time</p>
-                      </div>
-                    </label>
-                    <label
-                      className={cn(
-                        'flex flex-1 cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all hover:bg-muted/50',
-                        formData.priority === 'urgent' && 'border-destructive bg-destructive/5'
-                      )}
-                    >
-                      <RadioGroupItem value="urgent" />
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                      <label
+                        className={cn(
+                          'flex flex-1 cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all hover:bg-muted/50',
+                          formData.priority === 'normal' && 'border-primary bg-primary/5'
+                        )}
+                      >
+                        <RadioGroupItem value="normal" />
                         <div>
-                          <p className="font-medium">Urgent</p>
-                          <p className="text-xs text-muted-foreground">Requires immediate attention</p>
+                          <p className="font-medium">Normal</p>
+                          <p className="text-xs text-muted-foreground">3-5 working days</p>
                         </div>
+                      </label>
+                      <label
+                        className={cn(
+                          'flex flex-1 cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all hover:bg-muted/50',
+                          formData.priority === 'urgent' && 'border-destructive bg-destructive/5'
+                        )}
+                      >
+                        <RadioGroupItem value="urgent" />
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-destructive" />
+                          <div>
+                            <p className="font-medium">Urgent</p>
+                            <p className="text-xs text-muted-foreground">Admin priority (24-48 hours)</p>
+                          </div>
+                        </div>
+                      </label>
+                    </RadioGroup>
+                    {formData.priority === 'urgent' && (
+                      <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                        <AlertTriangle className="mr-2 inline h-4 w-4" />
+                        Urgent bonafide requests are routed directly to Admin for immediate processing.
                       </div>
-                    </label>
-                  </RadioGroup>
-                </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Document Upload */}
                 <div className="space-y-2">
