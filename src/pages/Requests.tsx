@@ -22,8 +22,9 @@ import {
 } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, FileText, Clock, CheckCircle2, XCircle, AlertCircle, Eye } from 'lucide-react';
+import { Plus, Search, Filter, FileText, Clock, CheckCircle2, XCircle, AlertCircle, Eye, Shield, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface Request {
   id: string;
@@ -253,52 +254,75 @@ const Requests: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRequests.map((request) => (
-                    <TableRow
-                      key={request.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => navigate(`/requests/${request.id}`)}
-                    >
-                      <TableCell className="font-medium">
-                        {request.request_number}
-                      </TableCell>
-                      {profile?.role !== 'student' && (
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{request.profiles?.full_name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {request.profiles?.roll_number}
-                            </p>
+                  {filteredRequests.map((request) => {
+                    const isUrgentBonafide = request.category === 'bonafide_certificate' && request.priority === 'urgent';
+                    const isBonafide = request.category === 'bonafide_certificate';
+                    
+                    return (
+                      <TableRow
+                        key={request.id}
+                        className={cn(
+                          "cursor-pointer hover:bg-muted/50",
+                          isUrgentBonafide && request.status !== 'approved' && request.status !== 'rejected' && "bg-destructive/5 border-l-4 border-l-destructive"
+                        )}
+                        onClick={() => navigate(`/requests/${request.id}`)}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            {request.request_number}
+                            {isUrgentBonafide && request.status !== 'approved' && request.status !== 'rejected' && (
+                              <AlertTriangle className="h-4 w-4 text-destructive" />
+                            )}
                           </div>
                         </TableCell>
-                      )}
-                      <TableCell>{formatCategory(request.category)}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`capitalize ${getStatusBadge(request.status)}`}
-                        >
-                          {getStatusIcon(request.status)}
-                          <span className="ml-1.5">{request.status.replace('_', ' ')}</span>
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {request.priority === 'urgent' ? (
-                          <Badge variant="destructive">Urgent</Badge>
-                        ) : (
-                          <Badge variant="secondary">Normal</Badge>
+                        {profile?.role !== 'student' && (
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{request.profiles?.full_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {request.profiles?.roll_number}
+                              </p>
+                            </div>
+                          </TableCell>
                         )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {format(new Date(request.created_at), 'MMM d, yyyy')}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {formatCategory(request.category)}
+                            {isBonafide && (
+                              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
+                                <Shield className="mr-1 h-3 w-3" />
+                                Admin
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={`capitalize ${getStatusBadge(request.status)}`}
+                          >
+                            {getStatusIcon(request.status)}
+                            <span className="ml-1.5">{request.status.replace('_', ' ')}</span>
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {request.priority === 'urgent' ? (
+                            <Badge variant="destructive">Urgent</Badge>
+                          ) : (
+                            <Badge variant="secondary">Normal</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {format(new Date(request.created_at), 'MMM d, yyyy')}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

@@ -198,6 +198,8 @@ export type Database = {
       }
       requests: {
         Row: {
+          approval_timestamp: string | null
+          approved_by: string | null
           approved_document_url: string | null
           assigned_to: string | null
           category: Database["public"]["Enums"]["request_category"]
@@ -215,6 +217,8 @@ export type Database = {
           verification_id: string | null
         }
         Insert: {
+          approval_timestamp?: string | null
+          approved_by?: string | null
           approved_document_url?: string | null
           assigned_to?: string | null
           category: Database["public"]["Enums"]["request_category"]
@@ -232,6 +236,8 @@ export type Database = {
           verification_id?: string | null
         }
         Update: {
+          approval_timestamp?: string | null
+          approved_by?: string | null
           approved_document_url?: string | null
           assigned_to?: string | null
           category?: Database["public"]["Enums"]["request_category"]
