@@ -208,8 +208,10 @@ export type Database = {
           department_id: string | null
           description: string
           document_url: string | null
+          fee_sub_category: string | null
           id: string
           priority: Database["public"]["Enums"]["request_priority"]
+          receipt_url: string | null
           request_number: string
           status: Database["public"]["Enums"]["request_status"]
           student_id: string
@@ -227,8 +229,10 @@ export type Database = {
           department_id?: string | null
           description: string
           document_url?: string | null
+          fee_sub_category?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["request_priority"]
+          receipt_url?: string | null
           request_number: string
           status?: Database["public"]["Enums"]["request_status"]
           student_id: string
@@ -246,8 +250,10 @@ export type Database = {
           department_id?: string | null
           description?: string
           document_url?: string | null
+          fee_sub_category?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["request_priority"]
+          receipt_url?: string | null
           request_number?: string
           status?: Database["public"]["Enums"]["request_status"]
           student_id?: string

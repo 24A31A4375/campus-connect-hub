@@ -74,6 +74,14 @@ const categoryConfig = {
   },
 };
 
+type FeeSubCategory = 'cdp_fees' | 'bus_fees' | 'tuition_fees';
+
+const feeSubCategoryLabels: Record<FeeSubCategory, string> = {
+  cdp_fees: 'CDP Fees (Campus Development Program)',
+  bus_fees: 'Bus Fees',
+  tuition_fees: 'Tuition Fees',
+};
+
 const NewRequest: React.FC = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -86,6 +94,8 @@ const NewRequest: React.FC = () => {
     description: '',
     priority: 'normal' as 'normal' | 'urgent',
     document: null as File | null,
+    feeSubCategory: '' as FeeSubCategory | '',
+    receipt: null as File | null,
   });
 
   const handleCategorySelect = (category: Category) => {
@@ -105,10 +115,31 @@ const NewRequest: React.FC = () => {
       return;
     }
 
+    // Validate fee issues specific fields
+    if (formData.category === 'fee_issues') {
+      if (!formData.feeSubCategory) {
+        toast({
+          title: 'Missing Fee Category',
+          description: 'Please select a fee sub-category.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (!formData.receipt) {
+        toast({
+          title: 'Missing Receipt',
+          description: 'Please upload a fee receipt (required for fee issues).',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
       let documentUrl = null;
+      let receiptUrl = null;
 
       // Upload document if provided
       if (formData.document) {
@@ -123,6 +154,19 @@ const NewRequest: React.FC = () => {
         documentUrl = uploadData.path;
       }
 
+      // Upload fee receipt if provided (for fee issues)
+      if (formData.receipt && formData.category === 'fee_issues') {
+        const fileExt = formData.receipt.name.split('.').pop();
+        const fileName = `${profile?.id}/${Date.now()}_receipt.${fileExt}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('fee-receipts')
+          .upload(fileName, formData.receipt);
+
+        if (uploadError) throw uploadError;
+        receiptUrl = uploadData.path;
+      }
+
       // Create request
       const { data, error } = await supabase
         .from('requests')
@@ -134,6 +178,8 @@ const NewRequest: React.FC = () => {
           department_id: profile?.department_id,
           document_url: documentUrl,
           request_number: `REQ-${Date.now()}`,
+          fee_sub_category: formData.category === 'fee_issues' ? formData.feeSubCategory : null,
+          receipt_url: receiptUrl,
         })
         .select()
         .single();
@@ -141,18 +187,21 @@ const NewRequest: React.FC = () => {
       if (error) throw error;
 
       // Create initial timeline entry
+      const timelineRemarks = formData.category === 'bonafide_certificate' && formData.priority === 'urgent'
+        ? 'Urgent Bonafide Certificate request submitted - Routed to Admin'
+        : formData.category === 'fee_issues'
+        ? `Fee Issue (${feeSubCategoryLabels[formData.feeSubCategory as FeeSubCategory]}) submitted`
+        : 'Request submitted successfully';
+
       await supabase.from('request_timeline').insert({
         request_id: data.id,
         status: 'submitted',
-        remarks: formData.category === 'bonafide_certificate' && formData.priority === 'urgent'
-          ? 'Urgent Bonafide Certificate request submitted - Routed to Admin'
-          : 'Request submitted successfully',
+        remarks: timelineRemarks,
         updated_by: profile?.id,
       });
 
       // Notify admins for urgent bonafide requests
       if (formData.category === 'bonafide_certificate' && formData.priority === 'urgent') {
-        // Fetch admin users
         const { data: adminRoles } = await supabase
           .from('user_roles')
           .select('user_id')
@@ -163,6 +212,27 @@ const NewRequest: React.FC = () => {
             user_id: admin.user_id,
             title: '🚨 URGENT: Bonafide Certificate Request',
             message: `Urgent bonafide certificate request ${data.request_number} requires immediate admin action.`,
+            link: `/requests/${data.id}`,
+          }));
+
+          await supabase.from('notifications').insert(notifications);
+        }
+      }
+
+      // Notify for fee issues submission
+      if (formData.category === 'fee_issues') {
+        // Notify faculty and admin of the department
+        const { data: facultyRoles } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('department_id', profile?.department_id)
+          .in('role', ['faculty', 'admin']);
+
+        if (facultyRoles && facultyRoles.length > 0) {
+          const notifications = facultyRoles.map(faculty => ({
+            user_id: faculty.id,
+            title: `📝 Fee Issue: ${feeSubCategoryLabels[formData.feeSubCategory as FeeSubCategory]}`,
+            message: `New fee issue request ${data.request_number} submitted.`,
             link: `/requests/${data.id}`,
           }));
 
@@ -305,12 +375,78 @@ const NewRequest: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Priority - Show for Bonafide Certificate */}
-                {formData.category === 'bonafide_certificate' && (
+                {/* Fee Sub-Category - Show for Fee Issues */}
+                {formData.category === 'fee_issues' && (
+                  <div className="space-y-3">
+                    <Label>
+                      Fee Category <span className="text-destructive">*</span>
+                    </Label>
+                    <Select
+                      value={formData.feeSubCategory}
+                      onValueChange={(value: FeeSubCategory) =>
+                        setFormData({ ...formData, feeSubCategory: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select fee category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cdp_fees">CDP Fees (Campus Development Program)</SelectItem>
+                        <SelectItem value="bus_fees">Bus Fees</SelectItem>
+                        <SelectItem value="tuition_fees">Tuition Fees</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Fee Receipt Upload - Mandatory for Fee Issues */}
+                {formData.category === 'fee_issues' && (
+                  <div className="space-y-2">
+                    <Label>
+                      Fee Receipt <span className="text-destructive">*</span>
+                    </Label>
+                    <div className="flex items-center gap-4">
+                      <label className={cn(
+                        'flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 transition-colors hover:border-primary hover:bg-muted/50',
+                        formData.receipt && 'border-success bg-success/5'
+                      )}>
+                        <Upload className={cn('h-5 w-5', formData.receipt ? 'text-success' : 'text-muted-foreground')} />
+                        <span className={cn('text-sm', formData.receipt ? 'text-success font-medium' : 'text-muted-foreground')}>
+                          {formData.receipt ? formData.receipt.name : 'Upload fee receipt (PDF, JPG, PNG) - Max 5MB'}
+                        </span>
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file && file.size > 5 * 1024 * 1024) {
+                              toast({
+                                title: 'File Too Large',
+                                description: 'Receipt file must be less than 5MB.',
+                                variant: 'destructive',
+                              });
+                              return;
+                            }
+                            setFormData({ ...formData, receipt: file || null });
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Upload your payment receipt as proof. This is required for fee issue requests.
+                    </p>
+                  </div>
+                )}
+
+                {/* Priority - Show for Bonafide Certificate and Fee Issues */}
+                {(formData.category === 'bonafide_certificate' || formData.category === 'fee_issues') && (
                   <div className="space-y-3">
                     <Label>Priority Level</Label>
                     <p className="text-xs text-muted-foreground">
-                      Select Urgent if you need the certificate within 24-48 hours
+                      {formData.category === 'bonafide_certificate' 
+                        ? 'Select Urgent if you need the certificate within 24-48 hours'
+                        : 'Select Urgent if your fee issue requires immediate attention'}
                     </p>
                     <RadioGroup
                       value={formData.priority}
@@ -342,12 +478,16 @@ const NewRequest: React.FC = () => {
                           <AlertTriangle className="h-4 w-4 text-destructive" />
                           <div>
                             <p className="font-medium">Urgent</p>
-                            <p className="text-xs text-muted-foreground">Admin priority (24-48 hours)</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formData.category === 'bonafide_certificate' 
+                                ? 'Admin priority (24-48 hours)'
+                                : 'Priority processing'}
+                            </p>
                           </div>
                         </div>
                       </label>
                     </RadioGroup>
-                    {formData.priority === 'urgent' && (
+                    {formData.priority === 'urgent' && formData.category === 'bonafide_certificate' && (
                       <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
                         <AlertTriangle className="mr-2 inline h-4 w-4" />
                         Urgent bonafide requests are routed directly to Admin for immediate processing.
@@ -356,26 +496,28 @@ const NewRequest: React.FC = () => {
                   </div>
                 )}
 
-                {/* Document Upload */}
-                <div className="space-y-2">
-                  <Label>Supporting Document (Optional)</Label>
-                  <div className="flex items-center gap-4">
-                    <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 transition-colors hover:border-primary hover:bg-muted/50">
-                      <Upload className="h-5 w-5 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">
-                        {formData.document ? formData.document.name : 'Click to upload PDF, JPG, or PNG'}
-                      </span>
-                      <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        className="hidden"
-                        onChange={(e) =>
-                          setFormData({ ...formData, document: e.target.files?.[0] || null })
-                        }
-                      />
-                    </label>
+                {/* Document Upload - Optional for non-fee issues */}
+                {formData.category !== 'fee_issues' && (
+                  <div className="space-y-2">
+                    <Label>Supporting Document (Optional)</Label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 transition-colors hover:border-primary hover:bg-muted/50">
+                        <Upload className="h-5 w-5 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">
+                          {formData.document ? formData.document.name : 'Click to upload PDF, JPG, or PNG'}
+                        </span>
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) =>
+                            setFormData({ ...formData, document: e.target.files?.[0] || null })
+                          }
+                        />
+                      </label>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Submit Button */}
                 <div className="flex gap-4 pt-4">
