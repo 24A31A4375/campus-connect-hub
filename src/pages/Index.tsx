@@ -64,7 +64,7 @@ const Index: React.FC = () => {
               <GraduationCap className="h-7 w-7 text-primary-foreground" />
             </div>
             <div className="text-primary-foreground">
-              <h1 className="text-xl font-bold">College Helpdesk</h1>
+              <h1 className="text-xl font-bold">Campus Desk</h1>
               <p className="text-xs opacity-80">Smart Support System</p>
             </div>
           </div>
@@ -188,10 +188,10 @@ const Index: React.FC = () => {
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="flex items-center gap-2">
               <GraduationCap className="h-6 w-6 text-primary" />
-              <span className="font-semibold">College Helpdesk</span>
+              <span className="font-semibold">Campus Desk</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              © 2024 College Helpdesk. All rights reserved.
+              © 2024 Campus Desk. All rights reserved.
             </p>
           </div>
         </div>

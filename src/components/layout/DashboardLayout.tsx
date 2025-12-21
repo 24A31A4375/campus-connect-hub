@@ -105,7 +105,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
               <GraduationCap className="h-6 w-6 text-sidebar-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold">College Helpdesk</h1>
+              <h1 className="text-lg font-bold">Campus Desk</h1>
               <p className="text-xs text-sidebar-foreground/70">Smart Support System</p>
             </div>
           </div>
