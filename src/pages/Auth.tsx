@@ -137,7 +137,7 @@ const Auth: React.FC = () => {
     } else {
       toast({
         title: 'Account Created!',
-        description: 'Welcome to College Helpdesk.',
+        description: 'Welcome to Campus Desk.',
       });
       navigate('/dashboard');
     }
@@ -156,7 +156,7 @@ const Auth: React.FC = () => {
             <GraduationCap className="h-8 w-8 text-primary-foreground" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">College Helpdesk</CardTitle>
+            <CardTitle className="text-2xl font-bold">Campus Desk</CardTitle>
             <CardDescription className="text-base">
               Smart Support System for Students & Staff
             </CardDescription>
