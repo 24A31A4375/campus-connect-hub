@@ -56,6 +56,8 @@ interface RequestDetail {
   approved_document_url: string | null;
   certificate_url: string | null;
   verification_id: string | null;
+  fee_sub_category: string | null;
+  receipt_url: string | null;
   created_at: string;
   updated_at: string;
   student_id: string;
@@ -65,6 +67,12 @@ interface RequestDetail {
   departments: { name: string } | null;
   assigned: { full_name: string } | null;
 }
+
+const feeSubCategoryLabels: Record<string, string> = {
+  cdp_fees: 'CDP Fees (Campus Development Program)',
+  bus_fees: 'Bus Fees',
+  tuition_fees: 'Tuition Fees',
+};
 
 const RequestDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -83,17 +91,20 @@ const RequestDetail: React.FC = () => {
   const certificateInputRef = useRef<HTMLInputElement>(null);
 
   const isBonafideRequest = request?.category === 'bonafide_certificate';
+  const isFeeRequest = request?.category === 'fee_issues';
   const isAdmin = profile?.role === 'admin';
   const isFaculty = profile?.role === 'faculty';
   const isStudent = profile?.role === 'student';
 
   // For bonafide requests, only admin can approve/reject
-  // Faculty can only view and add remarks
+  // For fee issues, faculty can update status within their department, admin has full control
+  // Faculty can only view and add remarks for bonafide
   const canUpdateStatus = isBonafideRequest
     ? isAdmin
     : (isAdmin || isFaculty);
 
   const canUploadCertificate = isBonafideRequest && isAdmin;
+  const canViewReceipt = isFeeRequest && (isAdmin || isFaculty || (isStudent && request?.student_id === profile?.id));
 
   useEffect(() => {
     const fetchRequest = async () => {
@@ -334,6 +345,34 @@ const RequestDetail: React.FC = () => {
     }
   };
 
+  const handleDownloadReceipt = async () => {
+    if (!request?.receipt_url) return;
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('fee-receipts')
+        .download(request.receipt_url);
+
+      if (error) throw error;
+
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      const ext = request.receipt_url.split('.').pop() || 'pdf';
+      a.download = `Fee_Receipt_${request.request_number}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      toast({
+        title: 'Download Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'submitted':
@@ -448,10 +487,33 @@ const RequestDetail: React.FC = () => {
                 <CardTitle>Request Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Fee Sub-Category Display */}
+                {isFeeRequest && request.fee_sub_category && (
+                  <div>
+                    <Label className="text-muted-foreground">Fee Category</Label>
+                    <p className="mt-1 font-medium">
+                      {feeSubCategoryLabels[request.fee_sub_category] || request.fee_sub_category}
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <Label className="text-muted-foreground">Description</Label>
                   <p className="mt-1">{request.description}</p>
                 </div>
+
+                {/* Fee Receipt Download */}
+                {isFeeRequest && request.receipt_url && canViewReceipt && (
+                  <div className="rounded-lg bg-muted/50 p-4">
+                    <Label className="text-muted-foreground">Fee Receipt</Label>
+                    <div className="mt-2">
+                      <Button variant="outline" size="sm" onClick={handleDownloadReceipt}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Download Receipt
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {request.document_url && (
                   <div>

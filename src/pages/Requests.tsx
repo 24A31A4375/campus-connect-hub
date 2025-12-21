@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, FileText, Clock, CheckCircle2, XCircle, AlertCircle, Eye, Shield, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Filter, FileText, Clock, CheckCircle2, XCircle, AlertCircle, Eye, Shield, AlertTriangle, DollarSign } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -33,11 +33,18 @@ interface Request {
   description: string;
   status: string;
   priority: string;
+  fee_sub_category: string | null;
   created_at: string;
   updated_at: string;
   profiles: { full_name: string; roll_number: string | null } | null;
   departments: { name: string } | null;
 }
+
+const feeSubCategoryLabels: Record<string, string> = {
+  cdp_fees: 'CDP Fees',
+  bus_fees: 'Bus Fees',
+  tuition_fees: 'Tuition Fees',
+};
 
 const Requests: React.FC = () => {
   const { profile } = useAuth();
@@ -286,13 +293,26 @@ const Requests: React.FC = () => {
                           </TableCell>
                         )}
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            {formatCategory(request.category)}
-                            {isBonafide && (
-                              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
-                                <Shield className="mr-1 h-3 w-3" />
-                                Admin
-                              </Badge>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              {formatCategory(request.category)}
+                              {isBonafide && (
+                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
+                                  <Shield className="mr-1 h-3 w-3" />
+                                  Admin
+                                </Badge>
+                              )}
+                              {request.category === 'fee_issues' && (
+                                <Badge variant="outline" className="bg-success/10 text-success border-success/20 text-xs">
+                                  <DollarSign className="mr-1 h-3 w-3" />
+                                  Fee
+                                </Badge>
+                              )}
+                            </div>
+                            {request.category === 'fee_issues' && request.fee_sub_category && (
+                              <span className="text-xs text-muted-foreground">
+                                {feeSubCategoryLabels[request.fee_sub_category] || request.fee_sub_category}
+                              </span>
                             )}
                           </div>
                         </TableCell>
