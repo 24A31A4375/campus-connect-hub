@@ -211,10 +211,14 @@ export type Database = {
           fee_sub_category: string | null
           id: string
           priority: Database["public"]["Enums"]["request_priority"]
+          receipt_required: boolean | null
+          receipt_uploaded_at: string | null
+          receipt_uploaded_by: string | null
           receipt_url: string | null
           request_number: string
           status: Database["public"]["Enums"]["request_status"]
           student_id: string
+          tuition_type: string | null
           updated_at: string | null
           verification_id: string | null
         }
@@ -232,10 +236,14 @@ export type Database = {
           fee_sub_category?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["request_priority"]
+          receipt_required?: boolean | null
+          receipt_uploaded_at?: string | null
+          receipt_uploaded_by?: string | null
           receipt_url?: string | null
           request_number: string
           status?: Database["public"]["Enums"]["request_status"]
           student_id: string
+          tuition_type?: string | null
           updated_at?: string | null
           verification_id?: string | null
         }
@@ -253,10 +261,14 @@ export type Database = {
           fee_sub_category?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["request_priority"]
+          receipt_required?: boolean | null
+          receipt_uploaded_at?: string | null
+          receipt_uploaded_by?: string | null
           receipt_url?: string | null
           request_number?: string
           status?: Database["public"]["Enums"]["request_status"]
           student_id?: string
+          tuition_type?: string | null
           updated_at?: string | null
           verification_id?: string | null
         }
@@ -273,6 +285,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requests_receipt_uploaded_by_fkey"
+            columns: ["receipt_uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
