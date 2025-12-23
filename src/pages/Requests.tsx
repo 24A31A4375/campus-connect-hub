@@ -34,6 +34,7 @@ interface Request {
   status: string;
   priority: string;
   fee_sub_category: string | null;
+  tuition_type: string | null;
   created_at: string;
   updated_at: string;
   profiles: { full_name: string; roll_number: string | null } | null;
@@ -44,6 +45,11 @@ const feeSubCategoryLabels: Record<string, string> = {
   cdp_fees: 'CDP Fees',
   bus_fees: 'Bus Fees',
   tuition_fees: 'Tuition Fees',
+};
+
+const tuitionTypeLabels: Record<string, string> = {
+  fee_reimbursement: 'Fee Reimbursement',
+  non_fee_reimbursement: 'Non-Fee Reimbursement',
 };
 
 const Requests: React.FC = () => {
@@ -264,6 +270,7 @@ const Requests: React.FC = () => {
                   {filteredRequests.map((request) => {
                     const isUrgentBonafide = request.category === 'bonafide_certificate' && request.priority === 'urgent';
                     const isBonafide = request.category === 'bonafide_certificate';
+                    const isFeeIssue = request.category === 'fee_issues';
                     
                     return (
                       <TableRow
@@ -302,16 +309,17 @@ const Requests: React.FC = () => {
                                   Admin
                                 </Badge>
                               )}
-                              {request.category === 'fee_issues' && (
+                              {isFeeIssue && (
                                 <Badge variant="outline" className="bg-success/10 text-success border-success/20 text-xs">
                                   <DollarSign className="mr-1 h-3 w-3" />
                                   Fee
                                 </Badge>
                               )}
                             </div>
-                            {request.category === 'fee_issues' && request.fee_sub_category && (
+                            {isFeeIssue && request.fee_sub_category && (
                               <span className="text-xs text-muted-foreground">
                                 {feeSubCategoryLabels[request.fee_sub_category] || request.fee_sub_category}
+                                {request.tuition_type && ` - ${tuitionTypeLabels[request.tuition_type] || request.tuition_type}`}
                               </span>
                             )}
                           </div>

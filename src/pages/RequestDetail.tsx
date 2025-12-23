@@ -34,6 +34,8 @@ import {
   Upload,
   Shield,
   AlertTriangle,
+  Info,
+  Ban,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -57,7 +59,11 @@ interface RequestDetail {
   certificate_url: string | null;
   verification_id: string | null;
   fee_sub_category: string | null;
+  tuition_type: string | null;
+  receipt_required: boolean | null;
   receipt_url: string | null;
+  receipt_uploaded_by: string | null;
+  receipt_uploaded_at: string | null;
   created_at: string;
   updated_at: string;
   student_id: string;
@@ -74,6 +80,11 @@ const feeSubCategoryLabels: Record<string, string> = {
   tuition_fees: 'Tuition Fees',
 };
 
+const tuitionTypeLabels: Record<string, string> = {
+  fee_reimbursement: 'Fee Reimbursement',
+  non_fee_reimbursement: 'Non-Fee Reimbursement',
+};
+
 const RequestDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { profile } = useAuth();
@@ -85,10 +96,12 @@ const RequestDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [uploadingCertificate, setUploadingCertificate] = useState(false);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
 
   const [newStatus, setNewStatus] = useState('');
   const [remarks, setRemarks] = useState('');
   const certificateInputRef = useRef<HTMLInputElement>(null);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
 
   const isBonafideRequest = request?.category === 'bonafide_certificate';
   const isFeeRequest = request?.category === 'fee_issues';
@@ -96,15 +109,30 @@ const RequestDetail: React.FC = () => {
   const isFaculty = profile?.role === 'faculty';
   const isStudent = profile?.role === 'student';
 
+  // Receipt logic
+  const receiptRequired = request?.receipt_required === true;
+  const hasReceipt = !!request?.receipt_url;
+
   // For bonafide requests, only admin can approve/reject
   // For fee issues, faculty can update status within their department, admin has full control
-  // Faculty can only view and add remarks for bonafide
   const canUpdateStatus = isBonafideRequest
     ? isAdmin
     : (isAdmin || isFaculty);
 
   const canUploadCertificate = isBonafideRequest && isAdmin;
-  const canViewReceipt = isFeeRequest && (isAdmin || isFaculty || (isStudent && request?.student_id === profile?.id));
+  
+  // Admin can upload receipt ONLY if receipt is required
+  const canUploadReceipt = isFeeRequest && isAdmin && receiptRequired && !hasReceipt;
+  
+  // Student can download receipt only after approval AND if receipt exists AND if receipt is required
+  const canStudentDownloadReceipt = isFeeRequest && isStudent && 
+    request?.student_id === profile?.id && 
+    request?.status === 'approved' && 
+    hasReceipt && 
+    receiptRequired;
+
+  // Admin can always view/download receipt if it exists
+  const canAdminViewReceipt = isFeeRequest && isAdmin && hasReceipt;
 
   useEffect(() => {
     const fetchRequest = async () => {
@@ -199,12 +227,20 @@ const RequestDetail: React.FC = () => {
         ? 'Bonafide Certificate Approved!'
         : isBonafideRequest && validStatus === 'rejected'
         ? 'Bonafide Certificate Rejected'
+        : isFeeRequest && validStatus === 'approved'
+        ? 'Fee Issue Approved!'
+        : isFeeRequest && validStatus === 'rejected'
+        ? 'Fee Issue Rejected'
         : 'Request Status Updated';
 
       const notificationMessage = isBonafideRequest && validStatus === 'approved'
         ? `Your Bonafide Certificate request ${request.request_number} has been approved. You can now download your certificate.`
         : isBonafideRequest && validStatus === 'rejected'
         ? `Your Bonafide Certificate request ${request.request_number} has been rejected. Please check the remarks for details.`
+        : isFeeRequest && validStatus === 'approved' && receiptRequired
+        ? `Your fee issue ${request.request_number} has been approved. You can now download your receipt.`
+        : isFeeRequest && validStatus === 'approved' && !receiptRequired
+        ? `Your fee issue ${request.request_number} has been approved.`
         : `Your request ${request.request_number} status changed to ${newStatus.replace('_', ' ')}`;
 
       await supabase.from('notifications').insert({
@@ -313,6 +349,89 @@ const RequestDetail: React.FC = () => {
       setUploadingCertificate(false);
       if (certificateInputRef.current) {
         certificateInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !request) return;
+
+    if (!isAdmin) {
+      toast({
+        title: 'Access Denied',
+        description: 'Only administrators can upload fee receipts.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: 'File Too Large',
+        description: 'Receipt file must be less than 5MB.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploadingReceipt(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${request.student_id}/${request.id}_receipt.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('fee-receipts')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Update request with receipt info
+      const { error: updateError } = await supabase
+        .from('requests')
+        .update({
+          receipt_url: fileName,
+          receipt_uploaded_by: profile?.id,
+          receipt_uploaded_at: new Date().toISOString(),
+        })
+        .eq('id', request.id);
+
+      if (updateError) throw updateError;
+
+      // Create timeline entry
+      await supabase.from('request_timeline').insert({
+        request_id: request.id,
+        status: request.status as any,
+        remarks: 'Official fee receipt uploaded by Admin.',
+        updated_by: profile?.id,
+      });
+
+      // Notify student if request is already approved
+      if (request.status === 'approved') {
+        await supabase.from('notifications').insert({
+          user_id: request.student_id,
+          title: '📄 Fee Receipt Available',
+          message: `Your fee receipt for ${request.request_number} is now available for download.`,
+          link: `/requests/${request.id}`,
+        });
+      }
+
+      toast({
+        title: 'Receipt Uploaded',
+        description: 'The fee receipt has been uploaded successfully.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Upload Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingReceipt(false);
+      if (receiptInputRef.current) {
+        receiptInputRef.current.value = '';
       }
     }
   };
@@ -497,21 +616,70 @@ const RequestDetail: React.FC = () => {
                   </div>
                 )}
 
+                {/* Tuition Type Display */}
+                {isFeeRequest && request.tuition_type && (
+                  <div>
+                    <Label className="text-muted-foreground">Tuition Type</Label>
+                    <p className="mt-1 font-medium">
+                      {tuitionTypeLabels[request.tuition_type] || request.tuition_type}
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <Label className="text-muted-foreground">Description</Label>
                   <p className="mt-1">{request.description}</p>
                 </div>
 
-                {/* Fee Receipt Download */}
-                {isFeeRequest && request.receipt_url && canViewReceipt && (
-                  <div className="rounded-lg bg-muted/50 p-4">
-                    <Label className="text-muted-foreground">Fee Receipt</Label>
-                    <div className="mt-2">
-                      <Button variant="outline" size="sm" onClick={handleDownloadReceipt}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Download Receipt
-                      </Button>
-                    </div>
+                {/* Receipt Status for Fee Issues */}
+                {isFeeRequest && (
+                  <div className="rounded-lg bg-muted/50 p-4 space-y-3">
+                    <Label className="text-muted-foreground">Receipt Status</Label>
+                    
+                    {!receiptRequired ? (
+                      // Fee Reimbursement - No receipt
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Ban className="h-4 w-4" />
+                        <span className="text-sm">Receipt not applicable for Fee Reimbursement</span>
+                      </div>
+                    ) : hasReceipt ? (
+                      // Receipt available
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-success">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span className="text-sm font-medium">Receipt Available</span>
+                        </div>
+                        
+                        {/* Admin can always download */}
+                        {canAdminViewReceipt && (
+                          <Button variant="outline" size="sm" onClick={handleDownloadReceipt}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download Receipt
+                          </Button>
+                        )}
+                        
+                        {/* Student can download only after approval */}
+                        {canStudentDownloadReceipt && (
+                          <Button variant="default" size="sm" onClick={handleDownloadReceipt}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download Receipt
+                          </Button>
+                        )}
+                        
+                        {/* Student sees pending message if not yet approved */}
+                        {isStudent && hasReceipt && request.status !== 'approved' && (
+                          <p className="text-sm text-muted-foreground">
+                            Receipt will be available for download once your request is approved.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      // Receipt required but not uploaded
+                      <div className="flex items-center gap-2 text-warning">
+                        <Clock className="h-4 w-4" />
+                        <span className="text-sm">Pending admin receipt upload</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -659,6 +827,81 @@ const RequestDetail: React.FC = () => {
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Uploading the certificate will automatically approve the request and notify the student.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Admin Fee Receipt Upload - Only for Fee Issues where receipt is required */}
+            {canUploadReceipt && (
+              <Card className="border-0 shadow-card border-success/20 bg-success/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Upload className="h-5 w-5 text-success" />
+                    Upload Fee Receipt
+                  </CardTitle>
+                  <CardDescription>Upload the official fee receipt for this request</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <Label className="text-muted-foreground">Student Name</Label>
+                      <p className="font-medium">{request.profiles?.full_name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Roll Number</Label>
+                      <p className="font-medium">{request.profiles?.roll_number || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Fee Category</Label>
+                      <p className="font-medium">
+                        {request.fee_sub_category ? feeSubCategoryLabels[request.fee_sub_category] : 'N/A'}
+                      </p>
+                    </div>
+                    {request.tuition_type && (
+                      <div>
+                        <Label className="text-muted-foreground">Tuition Type</Label>
+                        <p className="font-medium">
+                          {tuitionTypeLabels[request.tuition_type]}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label>Upload Receipt (PDF, JPG, PNG - Max 5MB)</Label>
+                    <div className="flex items-center gap-4">
+                      <input
+                        ref={receiptInputRef}
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={handleReceiptUpload}
+                        className="hidden"
+                        id="receipt-upload"
+                      />
+                      <Button
+                        variant="default"
+                        onClick={() => receiptInputRef.current?.click()}
+                        disabled={uploadingReceipt}
+                      >
+                        {uploadingReceipt ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="mr-2 h-4 w-4" />
+                            Upload Receipt
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Student will be able to download the receipt after the request is approved.
                     </p>
                   </div>
                 </CardContent>
